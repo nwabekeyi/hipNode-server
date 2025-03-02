@@ -6,7 +6,7 @@
   "scripts": {
   "start": "node server.js",
   "dev": "nodemon server.js",
-  "build": "npm build" 
+  "build": "npm run build" 
 },
   "repository": {
     "type": "git",
