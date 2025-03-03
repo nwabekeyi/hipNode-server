@@ -59,7 +59,7 @@ const loginUser = async (req, res) => {
     );
 
     // Save refresh token in the database
-    user.refreshTokens.push(refreshToken); //prevent refresh token from being replaced by another when user logs in on another device
+    user.refreshTokens = [refreshToken]; // Replace the array with the new token
     await user.save();
     
 
