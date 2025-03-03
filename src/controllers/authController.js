@@ -82,8 +82,6 @@ const loginUser = async (req, res) => {
     console.error("Login error:", error);
     res.status(500).json({ message: "Server error" });
   }
-  console.log("Access Token:", accessToken);
-console.log("Refresh Token:", refreshToken);
 };
 
 // Refresh access token
