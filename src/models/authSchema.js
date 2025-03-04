@@ -35,7 +35,7 @@ const UserSchema = new mongoose.Schema({
   },
   refreshTokens: [
     { type: String,
-      default: "" }
+      default: [] }
     ],
 
 }, { timestamps: true }); // Adds createdAt & updatedAt fields automatically
