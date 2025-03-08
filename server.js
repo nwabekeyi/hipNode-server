@@ -1,4 +1,4 @@
-require("dotenv").config(); // Load environment variables from .env file
+require("dotenv").config(); 
 const express = require("express");
 const cookieParser = require("cookie-parser");
 const fs = require("fs");
@@ -10,7 +10,6 @@ const rateLimit = require("express-rate-limit");
 const app = express();
 const connectDB = require("./src/config/dbConfig");
 const authRoutes = require("./src/routes/authRoute");
-
 const PORT = process.env.PORT || 5000;
 
 
@@ -49,11 +48,6 @@ const limiter = rateLimit({
     max: 100 // limit each IP to 100 requests per windowMs
 });
 app.use(limiter);
-
-
-// Middleware
-app.use(express.json());
-app.use(cookieParser());
 
 // Routes
 app.use("/auth", authRoutes);

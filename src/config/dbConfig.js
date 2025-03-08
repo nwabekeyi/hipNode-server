@@ -3,7 +3,7 @@ require("dotenv").config();
 
 const connectDB = async () => {
   try {
-    await mongoose.connect(process.env.MONGO_URI); // Removed deprecated options
+    await mongoose.connect(process.env.MONGO_URI); 
     console.log("MongoDB connected");
   } catch (error) {
     console.error("MongoDB connection error:", error);
@@ -11,5 +11,5 @@ const connectDB = async () => {
   }
 };
 
-module.exports = connectDB; // ✅ Export the function properly
+module.exports = connectDB; 
 
