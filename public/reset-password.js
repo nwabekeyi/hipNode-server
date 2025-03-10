@@ -16,7 +16,7 @@ document.getElementById('reset-password-form').addEventListener('submit', async 
   }
 
   try {
-    const response = await fetch(`http://localhost:5000/auth/reset-password/${token}`, {
+    const response = await fetch(`https://hipnode-server.onrender.com/auth/reset-password/${token}`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
