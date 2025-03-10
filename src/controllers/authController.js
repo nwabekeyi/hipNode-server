@@ -171,7 +171,7 @@ const forgotPassword = async (req, res) => {
     await user.save();
 
     // Send email with reset link to the static HTML page
-    const resetUrl = process.env.RESET_URL;
+    const resetUrl = `https://hipnode-server.onrender.com/reset-password.html?token=${resetToken}`;
     const transporter = nodemailer.createTransport({
       service: "gmail",
       auth: {
