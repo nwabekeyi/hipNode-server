@@ -49,6 +49,9 @@ const limiter = rateLimit({
 });
 app.use(limiter);
 
+// Serve static files from the "public" folder
+app.use(express.static(path.join(__dirname, 'public')));
+
 // Routes
 app.use("/auth", authRoutes);
 
