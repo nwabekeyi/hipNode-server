@@ -150,4 +150,7 @@ const logoutUser = async (req, res) => {
   }
 };
 
+// Forgot password
+
+
 module.exports = { registerUser, loginUser, refreshToken, logoutUser };
