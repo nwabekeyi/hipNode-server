@@ -63,14 +63,7 @@ const loginUser = async (req, res) => {
     user.refreshTokens.push(refreshToken);
     await user.save();
 
-    // Set tokens as HTTP-only cookies
-    res.cookie("accessToken", accessToken, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === "production",
-      sameSite: "strict",
-      maxAge: 1800000, // 30 minutes
-    });
-
+    // Set refresh token as HTTP-only cookie
     res.cookie("refreshToken", refreshToken, {
       httpOnly: true,
       secure: process.env.NODE_ENV === "production",
@@ -78,7 +71,11 @@ const loginUser = async (req, res) => {
       maxAge: 604800000, // 7 days
     });
 
-    res.status(200).json({ message: "Login successful" });
+    // Send access token in the JSON response
+    res.status(200).json({ 
+      message: "Login successful",
+      accessToken, // Include the access token in the response
+    });
   } catch (error) {
     console.error("Login error:", error);
     res.status(500).json({ message: "Server error" });
