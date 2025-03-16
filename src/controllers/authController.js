@@ -71,17 +71,25 @@ const loginUser = async (req, res) => {
       maxAge: 604800000, // 7 days
     });
 
-    // Send access token in the JSON response
+    // Send access token and user details in the JSON response
     res.status(200).json({ 
       message: "Login successful",
       accessToken, // Include the access token in the response
+      user: { // Include all user details (excluding sensitive data like password)
+        _id: user._id,
+        firstname: user.firstname,
+        surname: user.surname,
+        username: user.username,
+        dob: user.dob,
+        email: user.email,
+        // Add any other fields you want to send to the frontend
+      },
     });
   } catch (error) {
     console.error("Login error:", error);
     res.status(500).json({ message: "Server error" });
   }
 };
-
 // Refresh access token
 const refreshToken = async (req, res) => {
   const { refreshToken } = req.cookies;
