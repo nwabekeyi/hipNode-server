@@ -34,10 +34,31 @@ const UserSchema = new mongoose.Schema({
     required: true,
   },
   refreshTokens: [
-    { type: String,
-      default: [] }
-    ],
-
+    {
+      type: String,
+      default: [],
+    },
+  ],
+  resetPasswordToken: {
+    type: String,
+  },
+  resetPasswordExpires: {
+    type: Date,
+  },
+  followers: [
+    {
+      type: mongoose.Schema.Types.ObjectId, // Reference to other users
+      ref: "User", // Reference the same User model
+      default: [], // Default to an empty array
+    },
+  ],
+  following: [
+    {
+      type: mongoose.Schema.Types.ObjectId, // Reference to other users
+      ref: "User", // Reference the same User model
+      default: [], // Default to an empty array
+    },
+  ],
 }, { timestamps: true }); // Adds createdAt & updatedAt fields automatically
 
 module.exports = mongoose.model("User", UserSchema);
