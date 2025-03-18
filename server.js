@@ -7,7 +7,7 @@ const morgan = require("morgan");
 const helmet = require("helmet");
 const cors = require("cors");
 const rateLimit = require("express-rate-limit");
-const cloudinary = require("./cloudinary"); // Import Cloudinary configuration
+// const cloudinary = require("./cloudinary"); // Import Cloudinary configuration
 const connectDB = require("./src/config/dbConfig");
 const authRoutes = require("./src/routes/authRoute");
 const postRoutes = require("./src/routes/postRoutes"); // Import post routes
@@ -27,7 +27,7 @@ app.use(morgan("combined", { stream: accessLogStream }));
 // Security Middleware
 app.use(helmet());
 app.use(cors({
-    origin: "http://localhost:5173",
+    origin: ["http://localhost:5173", "http://127.0.0.1"],
     methods: ["POST", "GET", "OPTIONS"],
     allowedHeaders: ["Content-Type", "Authorization"],
     credentials: true,
@@ -56,7 +56,7 @@ app.use(express.static(path.join(__dirname, 'public')));
 
 // Routes
 app.use("/auth", authRoutes);  // Authentication routes
-app.use("/api/posts", postRoutes); // Post routes
+app.use("/posts", postRoutes); // Post routes
 
 // Connect to MongoDB and start the server
 connectDB().then(() => {

@@ -21,9 +21,8 @@ const PostSchema = new mongoose.Schema(
     },
     posterId: {
       type: mongoose.Schema.Types.ObjectId,
-      ref: "User", // References User collection
-      required: true,
-      unique: true,
+      ref: "User",
+      required: true, // ❌ Removed index: true
     },
     likes: {
       type: [{ type: mongoose.Schema.Types.ObjectId, ref: "User" }],
@@ -37,8 +36,8 @@ const PostSchema = new mongoose.Schema(
       {
         userId: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
         text: { type: String, required: true },
-        createdAt: { type: Date, default: Date.now }, // Timestamp for each comment
-        updatedAt: { type: Date, default: Date.now }, // Timestamp for each comment
+        createdAt: { type: Date, default: Date.now },
+        updatedAt: { type: Date, default: Date.now },
         likes: {
           type: [{ type: mongoose.Schema.Types.ObjectId, ref: "User" }],
           default: [],
@@ -46,7 +45,11 @@ const PostSchema = new mongoose.Schema(
       },
     ],
   },
-  { timestamps: true } // Adds createdAt & updatedAt fields to posts
+  { timestamps: true }
 );
 
+// ✅ Keep only this index declaration
+PostSchema.index({ posterId: 1 });
+
 module.exports = mongoose.model("Post", PostSchema);
+
