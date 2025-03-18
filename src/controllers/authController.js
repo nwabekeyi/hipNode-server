@@ -235,4 +235,72 @@ const resetPassword = async (req, res) => {
   }
 };
 
-module.exports = { registerUser, loginUser, refreshToken,forgotPassword, resetPassword, logoutUser };
+const followUser = async (req, res) => {
+  const { followerId, followedUserId } = req.body;
+
+  try {
+    // Check if the follower and followed user exist
+    const follower = await User.findById(followerId);
+    const followedUser = await User.findById(followedUserId);
+
+    if (!follower || !followedUser) {
+      return res.status(404).json({ message: "User not found" });
+    }
+
+    // Check if the user is already following the target user
+    if (follower.following.includes(followedUserId)) {
+      return res.status(400).json({ message: "You are already following this user" });
+    }
+
+    // Add the followed user to the follower's "following" array
+    follower.following.push(followedUserId);
+    await follower.save();
+
+    // Add the follower to the followed user's "followers" array
+    followedUser.followers.push(followerId);
+    await followedUser.save();
+
+    res.status(200).json({ message: "Follow operation successful" });
+  } catch (error) {
+    console.error("Follow user error:", error);
+    res.status(500).json({ message: "Server error" });
+  }
+};
+
+const unfollowUser = async (req, res) => {
+  const { followerId, followedUserId } = req.body;
+
+  try {
+    // Check if the follower and followed user exist
+    const follower = await User.findById(followerId);
+    const followedUser = await User.findById(followedUserId);
+
+    if (!follower || !followedUser) {
+      return res.status(404).json({ message: "User not found" });
+    }
+
+    // Check if the user is not following the target user
+    if (!follower.following.includes(followedUserId)) {
+      return res.status(400).json({ message: "You are not following this user" });
+    }
+
+    // Remove the followed user from the follower's "following" array
+    follower.following = follower.following.filter(
+      (id) => id.toString() !== followedUserId
+    );
+    await follower.save();
+
+    // Remove the follower from the followed user's "followers" array
+    followedUser.followers = followedUser.followers.filter(
+      (id) => id.toString() !== followerId
+    );
+    await followedUser.save();
+
+    res.status(200).json({ message: "Unfollow operation successful" });
+  } catch (error) {
+    console.error("Unfollow user error:", error);
+    res.status(500).json({ message: "Server error" });
+  }
+};
+
+module.exports = { registerUser, loginUser, refreshToken,forgotPassword, resetPassword, logoutUser, followUser, unfollowUser };
