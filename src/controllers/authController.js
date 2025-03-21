@@ -1,5 +1,7 @@
 const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
+const crypto = require("crypto");
+const nodemailer = require("nodemailer");
 const User = require("../models/authSchema");
 
 // Register a new user
@@ -61,14 +63,7 @@ const loginUser = async (req, res) => {
     user.refreshTokens.push(refreshToken);
     await user.save();
 
-    // Set tokens as HTTP-only cookies
-    res.cookie("accessToken", accessToken, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === "production",
-      sameSite: "strict",
-      maxAge: 1800000, // 30 minutes
-    });
-
+    // Set refresh token as HTTP-only cookie
     res.cookie("refreshToken", refreshToken, {
       httpOnly: true,
       secure: process.env.NODE_ENV === "production",
@@ -76,13 +71,25 @@ const loginUser = async (req, res) => {
       maxAge: 604800000, // 7 days
     });
 
-    res.status(200).json({ message: "Login successful" });
+    // Send access token and user details in the JSON response
+    res.status(200).json({ 
+      message: "Login successful",
+      accessToken, // Include the access token in the response
+      user: { // Include all user details (excluding sensitive data like password)
+        _id: user._id,
+        firstname: user.firstname,
+        surname: user.surname,
+        username: user.username,
+        dob: user.dob,
+        email: user.email,
+        // Add any other fields you want to send to the frontend
+      },
+    });
   } catch (error) {
     console.error("Login error:", error);
     res.status(500).json({ message: "Server error" });
   }
 };
-
 // Refresh access token
 const refreshToken = async (req, res) => {
   const { refreshToken } = req.cookies;
@@ -150,7 +157,150 @@ const logoutUser = async (req, res) => {
   }
 };
 
-// Forgot password
+const forgotPassword = async (req, res) => {
+  const { email } = req.body;
 
+  try {
+    const user = await User.findOne({ email });
+    if (!user) {
+      return res.status(404).json({ message: "User not found" });
+    }
 
-module.exports = { registerUser, loginUser, refreshToken, logoutUser };
+    // Generate a reset token
+    const resetToken = crypto.randomBytes(20).toString("hex");
+    const resetTokenExpiry = Date.now() + 3600000; // 1 hour from now
+
+    // Save the token and expiry in the database
+    user.resetPasswordToken = resetToken;
+    user.resetPasswordExpires = resetTokenExpiry;
+    await user.save();
+
+    // Send email with reset link to the static HTML page
+    const resetUrl = `https://hipnode-server.onrender.com/reset-password.html?token=${resetToken}`;
+    const transporter = nodemailer.createTransport({
+      service: "gmail",
+      auth: {
+        user: process.env.EMAIL_USER,
+        pass: process.env.EMAIL_PASS,
+      },
+    });
+
+    const mailOptions = {
+      to: user.email,
+      from: process.env.EMAIL_USER,
+      subject: "Password Reset",
+      text: `You are receiving this because you (or someone else) have requested the reset of the password for your account.\n\n
+        Please click on the following link, or paste it into your browser to complete the process:\n\n
+        ${resetUrl}\n\n
+        If you did not request this, please ignore this email and your password will remain unchanged.\n`,
+    };
+
+    await transporter.sendMail(mailOptions);
+    res.status(200).json({ message: "Password reset email sent" });
+  } catch (error) {
+    console.error("Forgot password error:", error);
+    res.status(500).json({ message: "Server error" });
+  }
+};
+
+// Reset password
+const resetPassword = async (req, res) => {
+  const { token } = req.params;
+  const { password } = req.body;
+
+  try {
+    const user = await User.findOne({
+      resetPasswordToken: token,
+      resetPasswordExpires: { $gt: Date.now() }, // Check if the token is still valid
+    });
+
+    if (!user) {
+      return res.status(400).json({ message: "Invalid or expired token" });
+    }
+
+    // Hash the new password
+    const salt = await bcrypt.genSalt(10);
+    const hashedPassword = await bcrypt.hash(password, salt);
+
+    // Update the user's password and clear the reset token
+    user.password = hashedPassword;
+    user.resetPasswordToken = undefined;
+    user.resetPasswordExpires = undefined;
+    await user.save();
+
+    res.status(200).json({ message: "Password reset successful" });
+  } catch (error) {
+    console.error("Reset password error:", error);
+    res.status(500).json({ message: "Server error" });
+  }
+};
+
+const followUser = async (req, res) => {
+  const { followerId, followedUserId } = req.body;
+
+  try {
+    // Check if the follower and followed user exist
+    const follower = await User.findById(followerId);
+    const followedUser = await User.findById(followedUserId);
+
+    if (!follower || !followedUser) {
+      return res.status(404).json({ message: "User not found" });
+    }
+
+    // Check if the user is already following the target user
+    if (follower.following.includes(followedUserId)) {
+      return res.status(400).json({ message: "You are already following this user" });
+    }
+
+    // Add the followed user to the follower's "following" array
+    follower.following.push(followedUserId);
+    await follower.save();
+
+    // Add the follower to the followed user's "followers" array
+    followedUser.followers.push(followerId);
+    await followedUser.save();
+
+    res.status(200).json({ message: "Follow operation successful" });
+  } catch (error) {
+    console.error("Follow user error:", error);
+    res.status(500).json({ message: "Server error" });
+  }
+};
+
+const unfollowUser = async (req, res) => {
+  const { followerId, followedUserId } = req.body;
+
+  try {
+    // Check if the follower and followed user exist
+    const follower = await User.findById(followerId);
+    const followedUser = await User.findById(followedUserId);
+
+    if (!follower || !followedUser) {
+      return res.status(404).json({ message: "User not found" });
+    }
+
+    // Check if the user is not following the target user
+    if (!follower.following.includes(followedUserId)) {
+      return res.status(400).json({ message: "You are not following this user" });
+    }
+
+    // Remove the followed user from the follower's "following" array
+    follower.following = follower.following.filter(
+      (id) => id.toString() !== followedUserId
+    );
+    await follower.save();
+
+    // Remove the follower from the followed user's "followers" array
+    followedUser.followers = followedUser.followers.filter(
+      (id) => id.toString() !== followerId
+    );
+    await followedUser.save();
+
+    res.status(200).json({ message: "Unfollow operation successful" });
+  } catch (error) {
+    console.error("Unfollow user error:", error);
+    res.status(500).json({ message: "Server error" });
+  }
+};
+
+module.exports = { registerUser, loginUser, refreshToken,forgotPassword, resetPassword, logoutUser, followUser, unfollowUser };
