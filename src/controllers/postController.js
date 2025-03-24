@@ -42,41 +42,69 @@ const getPostByUserId = async (req, res) => {
 
 // Create a new post (with image upload and authentication)
 const createPost = async (req, res) => {
-  try {
-    const { title, body, tags, posterId } = req.body;
-    const imageUrl = req.file ? req.file.path : ""; // Cloudinary URL
-
-    const newPost = new Post({
-      title,
-      body,
-      tags: tags ? tags.split(",") : [],
-      pictureUrl: imageUrl,
-      posterId
-    });
-
-    await newPost.save();
-    res.status(201).json({ message: "Post created successfully", post: newPost });
-  } catch (error) {
-    res.status(500).json({ message: "Error creating post", error: error.message });
-    console.error(error.message);
-  }
-};
-
+    try {
+      const { title, body, tags, posterId } = req.body;
+  
+      // ✅ Use Cloudinary URL from Multer storage
+      const imageUrl = req.file ? req.file.path : null;
+  
+      // Debugging: Check if the image URL is present
+      if (!imageUrl) {
+        return res.status(400).json({ message: "Image upload failed" });
+      }
+  
+      const newPost = new Post({
+        title,
+        body,
+        tags: tags ? tags.split(",") : [],
+        imageUrl, // ✅ Correct field name
+        posterId,
+      });
+  
+      await newPost.save();
+      res.status(201).json({ message: "Post created successfully", post: newPost });
+    } catch (error) {
+      console.error("Error creating post:", error);
+      res.status(500).json({ message: "Error creating post", error: error.message });
+    }
+  };
+  
 // Update a post (edit post details)
 const updaatePost = async (req, res) => {
-  try {
-    const { postId } = req.params;
-    const updatedPost = await Post.findByIdAndUpdate(postId, req.body, { new: true });
-
-    if (!updatedPost) {
-      return res.status(404).json({ message: "Post not found" });
+    try {
+      const { postId } = req.params;
+      const { title, body, tags } = req.body;
+  
+      // Find the post
+      const post = await Post.findById(postId);
+      if (!post) {
+        return res.status(404).json({ message: "Post not found" });
+      }
+  
+      // Handle image update (if a new image is uploaded)
+      let imageUrl = post.imageUrl; // Keep existing image by default
+      if (req.file) {
+        // Upload new image to Cloudinary
+        const result = await cloudinary.uploader.upload(req.file.path);
+        imageUrl = result.secure_url;
+      }
+  
+      // Update post fields
+      post.title = title || post.title;
+      post.body = body || post.body;
+      post.tags = tags ? tags.split(",") : post.tags;
+      post.imageUrl = imageUrl;
+  
+      // Save updated post
+      const updatedPost = await post.save();
+  
+      res.status(200).json({ message: "Post updated successfully", post: updatedPost });
+    } catch (error) {
+      console.error("Error updating post:", error);
+      res.status(500).json({ message: "Error updating post", error: error.message });
     }
-
-    res.status(200).json({ message: "Post updated successfully", post: updatedPost });
-  } catch (error) {
-    res.status(500).json({ message: "Error updating post", error });
-  }
-};
+  };
+  
 
 // Delete a post
 const deletePost = async (req, res) => {

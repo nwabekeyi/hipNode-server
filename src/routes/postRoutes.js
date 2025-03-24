@@ -13,21 +13,21 @@ const {
 } = require("../controllers/postController");
 
 // Get all posts
-router.get("/", getAllPosts);
+router.get("/", authenticateUser, getAllPosts);
 
 // Get posts by user ID (returns an array of user's posts)
-router.get("/:userId", getPostByUserId);
+router.get("/:userId", authenticateUser, getPostByUserId);
 
 // Create a new post (with image upload and authentication)
-router.post("/create", multerUpload.single("image"), createPost);
+router.post("/create", multerUpload.single("image"), createPost, authenticateUser,);
 
 // Update a post (edit post details)
-router.put("/:postId", updaatePost);
+router.put("/:postId", multerUpload.single("image"), updaatePost, authenticateUser,);
 
 // Delete a post
-router.delete("/:postId", deletePost);
+router.delete("/:postId", deletePost, authenticateUser,);
 
 // Get a single post by ID
-router.get("/:id", getPostById);
+router.get("/:id", getPostById, authenticateUser,);
 
 module.exports = router;

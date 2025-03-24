@@ -7,6 +7,7 @@ const storage = new CloudinaryStorage({
   params: {
     folder: "hipnode_uploads", // Cloudinary folder
     allowed_formats: ["jpg", "png", "jpeg", "gif"],
+    transformation: [{ width: 800, height: 800, crop: "limit" }], // Resize image
   },
 });
 
