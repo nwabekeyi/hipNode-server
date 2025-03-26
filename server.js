@@ -16,6 +16,7 @@ const authHandler = require("./src/handlers/authHandler");
 const messageHandler = require("./src/handlers/messageHandler");
 const disconnectHandler = require("./src/handlers/disconnectHandler");
 const messageRoute = require("./src/routes/messageRoute");
+const User = require("./src/models/authSchema"); // Import your User model (adjust path as needed)
 
 // Create an Express app
 const app = express();
@@ -39,7 +40,7 @@ app.use(
     methods: ["POST", "GET", "OPTIONS"],
     allowedHeaders: ["Content-Type", "Authorization"],
     credentials: true,
-  }),
+  })
 );
 app.set("trust proxy", 1);
 app.options("*", cors());
@@ -74,12 +75,27 @@ const wss = new WebSocket.Server({ server });
 // Store online users (Key: userId, Value: WebSocket connection)
 const onlineUsers = new Map();
 
-// Broadcast updated online users list
-const broadcastOnlineUsers = () => {
-  const userList = [...onlineUsers.keys()];
-  onlineUsers.forEach((ws) => {
-    ws.send(JSON.stringify({ type: "onlineUsers", users: userList }));
-  });
+// Broadcast updated online users list with usernames
+const broadcastOnlineUsers = async () => {
+  try {
+    const userIds = [...onlineUsers.keys()];
+    // Fetch user details from MongoDB
+    const users = await User.find({ _id: { $in: userIds } }).select("_id username");
+    const userList = users.map((user) => ({
+      id: user._id.toString(), // Ensure ID is a string
+      username: user.username,
+    }));
+
+    const message = JSON.stringify({ type: "onlineUsers", data: userList });
+    onlineUsers.forEach((ws) => {
+      if (ws.readyState === WebSocket.OPEN) {
+        ws.send(message);
+      }
+    });
+    console.log("Broadcasted online users:", userList);
+  } catch (error) {
+    console.error("Error broadcasting online users:", error);
+  }
 };
 
 // Handle WebSocket connections
@@ -103,6 +119,7 @@ wss.on("connection", (ws, req) => {
   ws.on("message", (message) => {
     try {
       const data = JSON.parse(message);
+      console.log("Server received:", data);
 
       switch (data.type) {
         case "auth":
@@ -111,6 +128,14 @@ wss.on("connection", (ws, req) => {
 
         case "message":
           messageHandler(ws, data, onlineUsers);
+          break;
+
+        case "typing":
+          const recipientWs = onlineUsers.get(data.toUserId);
+          if (recipientWs && recipientWs.readyState === WebSocket.OPEN) {
+            console.log("Forwarding typing event to:", data.toUserId);
+            recipientWs.send(JSON.stringify(data));
+          }
           break;
 
         default:
