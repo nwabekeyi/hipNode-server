@@ -8,9 +8,11 @@ const morgan = require("morgan");
 const helmet = require("helmet");
 const cors = require("cors");
 const rateLimit = require("express-rate-limit");
+// const cloudinary = require("./cloudinary"); // Import Cloudinary configuration
 const WebSocket = require("ws");
 const connectDB = require("./src/config/dbConfig");
 const authRoutes = require("./src/routes/authRoute");
+const postRoutes = require("./src/routes/postRoutes"); // Import post routes
 const userManager = require("./src/utils/userManager");
 const authHandler = require("./src/handlers/authHandler");
 const messageHandler = require("./src/handlers/messageHandler");
@@ -20,38 +22,38 @@ const User = require("./src/models/authSchema"); // Import your User model (adju
 
 // Create an Express app
 const app = express();
+const PORT = process.env.PORT || 5000;
 
 // Middleware
-app.use(express.json());
+app.use(express.json()); // Parse JSON bodies
 app.use(express.urlencoded({ extended: true }));
-app.use(cookieParser());
+app.use(cookieParser()); // Parse cookies
 
 // Logging
 const accessLogStream = fs.createWriteStream(path.join(__dirname, "access.log"), {
   flags: "a",
 });
+// Logging requests to a file
 app.use(morgan("combined", { stream: accessLogStream }));
 
 // Security Middleware
 app.use(helmet());
-app.use(
-  cors({
-    origin: "http://localhost:5173",
+app.use(cors({
+    origin: ["http://localhost:5173", "http://127.0.0.1"],
     methods: ["POST", "GET", "OPTIONS"],
     allowedHeaders: ["Content-Type", "Authorization"],
     credentials: true,
-  })
-);
+}));
+
 app.set("trust proxy", 1);
 app.options("*", cors());
 
-// Additional Security Headers
 app.use((req, res, next) => {
-  res.setHeader("X-Content-Type-Options", "nosniff");
-  res.setHeader("X-Frame-Options", "DENY");
-  res.setHeader("Content-Security-Policy", "default-src 'self'");
-  res.setHeader("Permissions-Policy", "geolocation=(), midi=()");
-  next();
+    res.setHeader("X-Content-Type-Options", "nosniff");
+    res.setHeader("X-Frame-Options", "DENY");
+    res.setHeader("Content-Security-Policy", "default-src 'self'");
+    res.setHeader("Permissions-Policy", "geolocation=(), midi=()");
+    next();
 });
 
 // Rate Limiting
@@ -65,7 +67,8 @@ app.use(limiter);
 app.use(express.static(path.join(__dirname, "public")));
 
 // Routes
-app.use("/auth", authRoutes);
+app.use("/auth", authRoutes);  // Authentication routes
+app.use("/posts", postRoutes); // Post routes
 app.use("/api", messageRoute);
 
 // Create HTTP and WebSocket servers
@@ -156,7 +159,6 @@ wss.on("connection", (ws, req) => {
 });
 
 // Connect to MongoDB and start the server
-const PORT = process.env.PORT || 5000;
 connectDB().then(() => {
   server.listen(PORT, () => {
     console.log(`Server running on http://localhost:${PORT}`);

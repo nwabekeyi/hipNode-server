@@ -74,15 +74,16 @@ const loginUser = async (req, res) => {
     // Send access token and user details in the JSON response
     res.status(200).json({ 
       message: "Login successful",
-      accessToken, // Include the access token in the response
-      user: { // Include all user details (excluding sensitive data like password)
+      accessToken, 
+      user: { 
         _id: user._id,
         firstname: user.firstname,
         surname: user.surname,
         username: user.username,
         dob: user.dob,
         email: user.email,
-        // Add any other fields you want to send to the frontend
+        followers:user.followers,
+        following: user.following
       },
     });
   } catch (error) {
