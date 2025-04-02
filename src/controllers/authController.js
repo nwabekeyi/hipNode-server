@@ -3,6 +3,7 @@ const jwt = require("jsonwebtoken");
 const crypto = require("crypto");
 const nodemailer = require("nodemailer");
 const User = require("../models/authSchema");
+const cloudinary = require("../config/profileCloudinaryConfig"); 
 
 // Register a new user
 const registerUser = async (req, res) => {
@@ -304,4 +305,96 @@ const unfollowUser = async (req, res) => {
   }
 };
 
-module.exports = { registerUser, loginUser, refreshToken,forgotPassword, resetPassword, logoutUser, followUser, unfollowUser };
+// Update profile picture
+const updateProfilePicture = async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    // Check if the user is authorized to update this profile
+    if (req.user.id !== id) {
+      return res.status(403).json({ message: "Unauthorized to update this profile" });
+    }
+
+    // Check if a file was uploaded
+    if (!req.file) {
+      return res.status(400).json({ message: "No file uploaded" });
+    }
+
+    // Upload the file to Cloudinary
+    const result = await new Promise((resolve, reject) => {
+      const uploadStream = cloudinary.uploader.upload_stream(
+        {
+          folder: "my-profile-pics", // Use a unique folder for your uploads
+          resource_type: "image",
+          transformation: [
+            { width: 150, height: 150, crop: "fill", gravity: "face" }, // Optimize for profile pics
+            { quality: "auto", fetch_format: "auto" }, // Optimize quality and format
+          ],
+        },
+        (error, result) => {
+          if (error) reject(error);
+          else resolve(result);
+        }
+      );
+      uploadStream.end(req.file.buffer); // Upload the file buffer
+    });
+
+    // Update the user's profilePicture field with the Cloudinary URL
+    const updatedUser = await User.findByIdAndUpdate(
+      id,
+      { profilePicture: result.secure_url },
+      { new: true, runValidators: true }
+    );
+
+    if (!updatedUser) {
+      return res.status(404).json({ message: "User not found" });
+    }
+
+    res.status(200).json({
+      message: "Profile picture updated successfully",
+      profilePicture: result.secure_url,
+    });
+  } catch (error) {
+    console.error("Error updating profile picture:", error);
+    res.status(500).json({ message: "Server error" });
+  }
+};
+
+// Update bio
+const updateBio = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { bio } = req.body;
+
+    // Validate input
+    if (typeof bio !== "string") {
+      return res.status(400).json({ message: "Bio must be a string" });
+    }
+    if (bio.length > 500) {
+      return res.status(400).json({ message: "Bio cannot exceed 500 characters" });
+    }
+
+    // Check if the user is authorized to update this profile
+    if (req.user.id !== id) {
+      return res.status(403).json({ message: "Unauthorized to update this profile" });
+    }
+
+    // Update the user
+    const updatedUser = await User.findByIdAndUpdate(
+      id,
+      { bio },
+      { new: true, runValidators: true }
+    );
+
+    if (!updatedUser) {
+      return res.status(404).json({ message: "User not found" });
+    }
+
+    res.status(200).json({ message: "Bio updated successfully", user: updatedUser });
+  } catch (error) {
+    console.error("Error updating bio:", error);
+    res.status(500).json({ message: "Server error" });
+  }
+};
+
+module.exports = { registerUser, loginUser, refreshToken,forgotPassword, resetPassword, logoutUser, followUser, unfollowUser, updateProfilePicture, updateBio };
