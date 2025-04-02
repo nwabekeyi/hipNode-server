@@ -47,18 +47,26 @@ const UserSchema = new mongoose.Schema({
   },
   followers: [
     {
-      type: mongoose.Schema.Types.ObjectId, // Reference to other users
-      ref: "User", // Reference the same User model
-      default: [], // Default to an empty array
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+      default: [],
     },
   ],
   following: [
     {
-      type: mongoose.Schema.Types.ObjectId, // Reference to other users
-      ref: "User", // Reference the same User model
-      default: [], // Default to an empty array
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+      default: [],
     },
   ],
+  profilePicture: { // New field
+    type: String,
+    default: "",
+  },
+  bio: { // New field
+    type: String,
+    default: "",
+  },
 }, { timestamps: true }); // Adds createdAt & updatedAt fields automatically
 
 module.exports = mongoose.model("User", UserSchema);

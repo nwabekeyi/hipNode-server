@@ -2,3 +2,4 @@ node_modules/
 tokenGen.js
 .env
 access.log
+migrate.js
