@@ -40,7 +40,7 @@ app.use(morgan("combined", { stream: accessLogStream }));
 app.use(helmet());
 app.use(cors({
     origin: ["http://localhost:5173", "http://127.0.0.1"],
-    methods: ["POST", "GET", "OPTIONS"],
+    methods: ["POST", "GET","PATCH", "OPTIONS"],
     allowedHeaders: ["Content-Type", "Authorization"],
     credentials: true,
 }));
