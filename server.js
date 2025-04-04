@@ -8,52 +8,54 @@ const morgan = require("morgan");
 const helmet = require("helmet");
 const cors = require("cors");
 const rateLimit = require("express-rate-limit");
-// const cloudinary = require("./cloudinary"); // Import Cloudinary configuration
 const WebSocket = require("ws");
 const connectDB = require("./src/config/dbConfig");
 const authRoutes = require("./src/routes/authRoute");
-const postRoutes = require("./src/routes/postRoutes"); // Import post routes
+const postRoutes = require("./src/routes/postRoutes");
+const notificationRoute = require("./src/routes/notifRoute");
 const userManager = require("./src/utils/userManager");
 const authHandler = require("./src/handlers/authHandler");
 const messageHandler = require("./src/handlers/messageHandler");
 const disconnectHandler = require("./src/handlers/disconnectHandler");
 const messageRoute = require("./src/routes/messageRoute");
-const User = require("./src/models/authSchema"); // Import your User model (adjust path as needed)
+const User = require("./src/models/authSchema");
+const Notification = require("./src/models/notifSchema"); // Added for pending notifications
+const { onlineUsers } = require("./src/utils/websocketUtils"); // Updated import
 
-// Create an Express app
 const app = express();
 const PORT = process.env.PORT || 5000;
 
 // Middleware
-app.use(express.json()); // Parse JSON bodies
+app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
-app.use(cookieParser()); // Parse cookies
+app.use(cookieParser());
 
 // Logging
 const accessLogStream = fs.createWriteStream(path.join(__dirname, "access.log"), {
   flags: "a",
 });
-// Logging requests to a file
 app.use(morgan("combined", { stream: accessLogStream }));
 
 // Security Middleware
 app.use(helmet());
-app.use(cors({
+app.use(
+  cors({
     origin: ["http://localhost:5173", "http://127.0.0.1"],
-    methods: ["POST", "GET","PATCH", "OPTIONS"],
+    methods: ["POST", "GET", "PATCH", "OPTIONS"],
     allowedHeaders: ["Content-Type", "Authorization"],
     credentials: true,
-}));
+  })
+);
 
 app.set("trust proxy", 1);
 app.options("*", cors());
 
 app.use((req, res, next) => {
-    res.setHeader("X-Content-Type-Options", "nosniff");
-    res.setHeader("X-Frame-Options", "DENY");
-    res.setHeader("Content-Security-Policy", "default-src 'self'");
-    res.setHeader("Permissions-Policy", "geolocation=(), midi=()");
-    next();
+  res.setHeader("X-Content-Type-Options", "nosniff");
+  res.setHeader("X-Frame-Options", "DENY");
+  res.setHeader("Content-Security-Policy", "default-src 'self'");
+  res.setHeader("Permissions-Policy", "geolocation=(), midi=()");
+  next();
 });
 
 // Rate Limiting
@@ -67,25 +69,22 @@ app.use(limiter);
 app.use(express.static(path.join(__dirname, "public")));
 
 // Routes
-app.use("/auth", authRoutes);  // Authentication routes
-app.use("/posts", postRoutes); // Post routes
+app.use("/auth", authRoutes);
+app.use("/posts", postRoutes);
 app.use("/api", messageRoute);
+app.use("/api", notificationRoute);
 
 // Create HTTP and WebSocket servers
 const server = http.createServer(app);
 const wss = new WebSocket.Server({ server });
 
-// Store online users (Key: userId, Value: WebSocket connection)
-const onlineUsers = new Map();
-
 // Broadcast updated online users list with usernames
 const broadcastOnlineUsers = async () => {
   try {
     const userIds = [...onlineUsers.keys()];
-    // Fetch user details from MongoDB
     const users = await User.find({ _id: { $in: userIds } }).select("_id username");
     const userList = users.map((user) => ({
-      id: user._id.toString(), // Ensure ID is a string
+      id: user._id.toString(),
       username: user.username,
     }));
 
@@ -111,14 +110,28 @@ wss.on("connection", (ws, req) => {
     return ws.close();
   }
 
-  // Add user to onlineUsers map
   onlineUsers.set(userId, ws);
   console.log(`User ${userId} connected. Online users:`, [...onlineUsers.keys()]);
-
-  // Send updated online users list to all clients
   broadcastOnlineUsers();
 
-  // Handle incoming messages
+  // Send pending notifications
+  const sendPendingNotifications = async () => {
+    try {
+      const unreadNotifications = await Notification.find({ toUserId: userId, read: false });
+      unreadNotifications.forEach((notification) => {
+        if (ws.readyState === WebSocket.OPEN) {
+          ws.send(JSON.stringify(notification));
+          console.log(`Sent pending notification to ${userId}:`, notification);
+        }
+      });
+      // Mark as read (optional, remove if you want manual marking)
+      await Notification.updateMany({ toUserId: userId, read: false }, { read: true });
+    } catch (error) {
+      console.error("Error sending pending notifications:", error);
+    }
+  };
+  sendPendingNotifications();
+
   ws.on("message", (message) => {
     try {
       const data = JSON.parse(message);
@@ -128,11 +141,9 @@ wss.on("connection", (ws, req) => {
         case "auth":
           authHandler(ws, data);
           break;
-
         case "message":
           messageHandler(ws, data, onlineUsers);
           break;
-
         case "typing":
           const recipientWs = onlineUsers.get(data.toUserId);
           if (recipientWs && recipientWs.readyState === WebSocket.OPEN) {
@@ -140,7 +151,6 @@ wss.on("connection", (ws, req) => {
             recipientWs.send(JSON.stringify(data));
           }
           break;
-
         default:
           console.log("Unknown message type:", data.type);
       }
@@ -149,7 +159,6 @@ wss.on("connection", (ws, req) => {
     }
   });
 
-  // Handle client disconnection
   ws.on("close", () => {
     onlineUsers.delete(userId);
     console.log(`User ${userId} disconnected.`);

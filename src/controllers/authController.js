@@ -3,7 +3,8 @@ const jwt = require("jsonwebtoken");
 const crypto = require("crypto");
 const nodemailer = require("nodemailer");
 const User = require("../models/authSchema");
-const cloudinary = require("../config/profileCloudinaryConfig"); 
+const cloudinary = require("../config/profileCloudinaryConfig");
+const { createAndSendNotification } = require("./notifController"); // Import the centralized notification function
 
 // Register a new user
 const registerUser = async (req, res) => {
@@ -83,7 +84,7 @@ const loginUser = async (req, res) => {
         username: user.username,
         dob: user.dob,
         email: user.email,
-        followers:user.followers,
+        followers: user.followers,
         following: user.following
       },
     });
@@ -92,6 +93,7 @@ const loginUser = async (req, res) => {
     res.status(500).json({ message: "Server error" });
   }
 };
+
 // Refresh access token
 const refreshToken = async (req, res) => {
   const { refreshToken } = req.cookies;
@@ -115,7 +117,7 @@ const refreshToken = async (req, res) => {
     const accessToken = jwt.sign(
       { id: user._id },
       process.env.JWT_SECRET,
-      { expiresIn: "30m" } // Consistent expiry time
+      { expiresIn: "30m" }
     );
 
     // Set the new access token as an HTTP-only cookie
@@ -159,6 +161,7 @@ const logoutUser = async (req, res) => {
   }
 };
 
+// Forgot password
 const forgotPassword = async (req, res) => {
   const { email } = req.body;
 
@@ -213,7 +216,7 @@ const resetPassword = async (req, res) => {
   try {
     const user = await User.findOne({
       resetPasswordToken: token,
-      resetPasswordExpires: { $gt: Date.now() }, // Check if the token is still valid
+      resetPasswordExpires: { $gt: Date.now() },
     });
 
     if (!user) {
@@ -237,6 +240,7 @@ const resetPassword = async (req, res) => {
   }
 };
 
+// Follow user
 const followUser = async (req, res) => {
   const { followerId, followedUserId } = req.body;
 
@@ -262,13 +266,25 @@ const followUser = async (req, res) => {
     followedUser.followers.push(followerId);
     await followedUser.save();
 
-    res.status(200).json({ message: "Follow operation successful" });
+    // Create and send notification
+    const notification = await createAndSendNotification({
+      toUserId: followedUserId,
+      fromUserId: followerId,
+      message: `${follower.username} started following you.`,
+      action: "follow",
+    });
+
+    res.status(200).json({ 
+      message: "Follow operation successful",
+      notification // Optionally return the notification
+    });
   } catch (error) {
     console.error("Follow user error:", error);
     res.status(500).json({ message: "Server error" });
   }
 };
 
+// Unfollow user
 const unfollowUser = async (req, res) => {
   const { followerId, followedUserId } = req.body;
 
@@ -324,11 +340,11 @@ const updateProfilePicture = async (req, res) => {
     const result = await new Promise((resolve, reject) => {
       const uploadStream = cloudinary.uploader.upload_stream(
         {
-          folder: "my-profile-pics", // Use a unique folder for your uploads
+          folder: "my-profile-pics",
           resource_type: "image",
           transformation: [
-            { width: 150, height: 150, crop: "fill", gravity: "face" }, // Optimize for profile pics
-            { quality: "auto", fetch_format: "auto" }, // Optimize quality and format
+            { width: 150, height: 150, crop: "fill", gravity: "face" },
+            { quality: "auto", fetch_format: "auto" },
           ],
         },
         (error, result) => {
@@ -336,7 +352,7 @@ const updateProfilePicture = async (req, res) => {
           else resolve(result);
         }
       );
-      uploadStream.end(req.file.buffer); // Upload the file buffer
+      uploadStream.end(req.file.buffer);
     });
 
     // Update the user's profilePicture field with the Cloudinary URL
@@ -397,6 +413,7 @@ const updateBio = async (req, res) => {
   }
 };
 
+// Get user by ID
 const getUserById = async (req, res) => {
   try {
     const userId = req.params.id;
@@ -409,8 +426,8 @@ const getUserById = async (req, res) => {
     // Fetch the user by ID and populate followers and following
     const user = await User.findById(userId)
       .select("-password -refreshTokens") // Exclude sensitive fields
-      .populate("followers", "firstname surname username profilePicture") // Populate followers
-      .populate("following", "firstname surname username profilePicture"); // Populate following
+      .populate("followers", "firstname surname username profilePicture")
+      .populate("following", "firstname surname username profilePicture");
 
     if (!user) {
       return res.status(404).json({ message: "User not found" });
@@ -426,4 +443,16 @@ const getUserById = async (req, res) => {
   }
 };
 
-module.exports = { registerUser, loginUser, refreshToken,forgotPassword,getUserById, resetPassword, logoutUser, followUser, unfollowUser, updateProfilePicture, updateBio };
+module.exports = { 
+  registerUser, 
+  loginUser, 
+  refreshToken,
+  forgotPassword, 
+  getUserById, 
+  resetPassword, 
+  logoutUser, 
+  followUser, 
+  unfollowUser, 
+  updateProfilePicture, 
+  updateBio 
+};
