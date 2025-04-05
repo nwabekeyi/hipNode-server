@@ -47,36 +47,26 @@ const loginUser = async (req, res) => {
       return res.status(400).json({ message: "Incorrect email or password" });
     }
 
-    // Generate access token (valid for 30 minutes)
     const accessToken = jwt.sign(
       { id: user._id },
       process.env.JWT_SECRET,
       { expiresIn: "30m" }
     );
 
-    // Generate refresh token (valid for 7 days)
     const refreshToken = jwt.sign(
       { id: user._id },
       process.env.REFRESH_SECRET,
       { expiresIn: "7d" }
     );
 
-    // Save refresh token in the database
     user.refreshTokens.push(refreshToken);
     await user.save();
 
-    // Set refresh token as HTTP-only cookie
-    res.cookie("refreshToken", refreshToken, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === "production",
-      sameSite: "strict",
-      maxAge: 604800000, // 7 days
-    });
-
-    // Send access token and user details in the JSON response
+    // Send both tokens in the JSON response (no cookie)
     res.status(200).json({ 
       message: "Login successful",
-      accessToken, 
+      accessToken,
+      refreshToken, // Add refreshToken to the response
       user: { 
         _id: user._id,
         firstname: user.firstname,
@@ -96,12 +86,12 @@ const loginUser = async (req, res) => {
 
 // Refresh access token
 const refreshToken = async (req, res) => {
-  const { refreshToken } = req.cookies;
+  const { refreshToken } = req.body; // Expect refreshToken in JSON body
   if (!refreshToken) {
     return res.status(401).json({ message: "No refresh token provided" });
   }
 
-  if (!refreshToken || typeof refreshToken !== 'string' || !refreshToken.includes('.')) {
+  if (typeof refreshToken !== 'string' || !refreshToken.includes('.')) {
     return res.status(400).json({ error: 'Invalid token format' });
   }
   
@@ -113,22 +103,16 @@ const refreshToken = async (req, res) => {
       return res.status(403).json({ message: "Invalid refresh token" });
     }
 
-    // Generate a new access token
     const accessToken = jwt.sign(
       { id: user._id },
       process.env.JWT_SECRET,
       { expiresIn: "30m" }
     );
 
-    // Set the new access token as an HTTP-only cookie
-    res.cookie("accessToken", accessToken, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === "production",
-      sameSite: "strict",
-      maxAge: 1800000, // 30 minutes
+    res.status(200).json({ 
+      message: "Access token refreshed",
+      accessToken // Return new access token in JSON
     });
-
-    res.status(200).json({ message: "Access token refreshed" });
   } catch (error) {
     console.error("Refresh token error:", error);
     if (error.name === "TokenExpiredError") {
