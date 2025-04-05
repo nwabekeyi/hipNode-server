@@ -33,6 +33,12 @@ document.getElementById('reset-password-form').addEventListener('submit', async 
     // Display success message
     messageDiv.textContent = data.message;
     messageDiv.className = 'message';
+
+    // Redirect to login page after 2 seconds
+    setTimeout(() => {
+      window.location.href = 'http://localhost:5173/login';
+    }, 5000);
+
   } catch (error) {
     // Display error message
     messageDiv.textContent = error.message || 'An error occurred. Please try again.';
