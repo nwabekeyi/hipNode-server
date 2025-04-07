@@ -43,12 +43,15 @@ app.use(
     origin: ["http://localhost:5173", "http://127.0.0.1"],
     methods: ["POST", "GET", "PATCH", "OPTIONS"],
     allowedHeaders: ["Content-Type", "Authorization"],
-    // credentials: true,
+    credentials: true,
   })
 );
 
 app.set("trust proxy", 1);
-app.options("*", cors());
+app.options("*", (req, res) => {
+  console.log("Handling OPTIONS request for:", req.path);
+  cors()(req, res, () => res.status(204).send());
+});
 
 app.use((req, res, next) => {
   res.setHeader("X-Content-Type-Options", "nosniff");
