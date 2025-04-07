@@ -14,7 +14,8 @@ const {
   followUser,
   unfollowUser,
   updateProfilePicture,
-  updateBio 
+  updateBio,
+  getUserById 
 } = require("../controllers/authController");
 
 
@@ -51,6 +52,7 @@ router.post("/unfollow", authenticateUser, unfollowUser);
 router.get("/protected", authenticateUser, (req, res) => {
   res.json({ message: "Welcome, authenticated user!" });
 });
+router.get("/:id", authenticateUser, getUserById);
 
 // Profile update routes (protected)
 router.patch("/:id/profile-picture", authenticateUser, upload.single("profilePicture"), updateProfilePicture);

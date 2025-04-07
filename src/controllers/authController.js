@@ -3,7 +3,8 @@ const jwt = require("jsonwebtoken");
 const crypto = require("crypto");
 const nodemailer = require("nodemailer");
 const User = require("../models/authSchema");
-const cloudinary = require("../config/profileCloudinaryConfig"); 
+const cloudinary = require("../config/profileCloudinaryConfig");
+const { createAndSendNotification } = require("./notifController"); // Import the centralized notification function
 
 // Register a new user
 const registerUser = async (req, res) => {
@@ -46,36 +47,26 @@ const loginUser = async (req, res) => {
       return res.status(400).json({ message: "Incorrect email or password" });
     }
 
-    // Generate access token (valid for 30 minutes)
     const accessToken = jwt.sign(
       { id: user._id },
       process.env.JWT_SECRET,
       { expiresIn: "30m" }
     );
 
-    // Generate refresh token (valid for 7 days)
     const refreshToken = jwt.sign(
       { id: user._id },
       process.env.REFRESH_SECRET,
       { expiresIn: "7d" }
     );
 
-    // Save refresh token in the database
     user.refreshTokens.push(refreshToken);
     await user.save();
 
-    // Set refresh token as HTTP-only cookie
-    res.cookie("refreshToken", refreshToken, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === "production",
-      sameSite: "strict",
-      maxAge: 604800000, // 7 days
-    });
-
-    // Send access token and user details in the JSON response
+    // Send both tokens in the JSON response (no cookie)
     res.status(200).json({ 
       message: "Login successful",
-      accessToken, 
+      accessToken,
+      refreshToken, // Add refreshToken to the response
       user: { 
         _id: user._id,
         firstname: user.firstname,
@@ -83,7 +74,7 @@ const loginUser = async (req, res) => {
         username: user.username,
         dob: user.dob,
         email: user.email,
-        followers:user.followers,
+        followers: user.followers,
         following: user.following
       },
     });
@@ -92,14 +83,15 @@ const loginUser = async (req, res) => {
     res.status(500).json({ message: "Server error" });
   }
 };
+
 // Refresh access token
 const refreshToken = async (req, res) => {
-  const { refreshToken } = req.cookies;
+  const { refreshToken } = req.body; // Expect refreshToken in JSON body
   if (!refreshToken) {
     return res.status(401).json({ message: "No refresh token provided" });
   }
 
-  if (!refreshToken || typeof refreshToken !== 'string' || !refreshToken.includes('.')) {
+  if (typeof refreshToken !== 'string' || !refreshToken.includes('.')) {
     return res.status(400).json({ error: 'Invalid token format' });
   }
   
@@ -111,22 +103,16 @@ const refreshToken = async (req, res) => {
       return res.status(403).json({ message: "Invalid refresh token" });
     }
 
-    // Generate a new access token
     const accessToken = jwt.sign(
       { id: user._id },
       process.env.JWT_SECRET,
-      { expiresIn: "30m" } // Consistent expiry time
+      { expiresIn: "30m" }
     );
 
-    // Set the new access token as an HTTP-only cookie
-    res.cookie("accessToken", accessToken, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === "production",
-      sameSite: "strict",
-      maxAge: 1800000, // 30 minutes
+    res.status(200).json({ 
+      message: "Access token refreshed",
+      accessToken // Return new access token in JSON
     });
-
-    res.status(200).json({ message: "Access token refreshed" });
   } catch (error) {
     console.error("Refresh token error:", error);
     if (error.name === "TokenExpiredError") {
@@ -159,6 +145,7 @@ const logoutUser = async (req, res) => {
   }
 };
 
+// Forgot password
 const forgotPassword = async (req, res) => {
   const { email } = req.body;
 
@@ -213,7 +200,7 @@ const resetPassword = async (req, res) => {
   try {
     const user = await User.findOne({
       resetPasswordToken: token,
-      resetPasswordExpires: { $gt: Date.now() }, // Check if the token is still valid
+      resetPasswordExpires: { $gt: Date.now() },
     });
 
     if (!user) {
@@ -237,6 +224,7 @@ const resetPassword = async (req, res) => {
   }
 };
 
+// Follow user
 const followUser = async (req, res) => {
   const { followerId, followedUserId } = req.body;
 
@@ -262,13 +250,25 @@ const followUser = async (req, res) => {
     followedUser.followers.push(followerId);
     await followedUser.save();
 
-    res.status(200).json({ message: "Follow operation successful" });
+    // Create and send notification
+    const notification = await createAndSendNotification({
+      toUserId: followedUserId,
+      fromUserId: followerId,
+      message: `${follower.username} started following you.`,
+      action: "follow",
+    });
+
+    res.status(200).json({ 
+      message: "Follow operation successful",
+      notification // Optionally return the notification
+    });
   } catch (error) {
     console.error("Follow user error:", error);
     res.status(500).json({ message: "Server error" });
   }
 };
 
+// Unfollow user
 const unfollowUser = async (req, res) => {
   const { followerId, followedUserId } = req.body;
 
@@ -324,11 +324,11 @@ const updateProfilePicture = async (req, res) => {
     const result = await new Promise((resolve, reject) => {
       const uploadStream = cloudinary.uploader.upload_stream(
         {
-          folder: "my-profile-pics", // Use a unique folder for your uploads
+          folder: "my-profile-pics",
           resource_type: "image",
           transformation: [
-            { width: 150, height: 150, crop: "fill", gravity: "face" }, // Optimize for profile pics
-            { quality: "auto", fetch_format: "auto" }, // Optimize quality and format
+            { width: 150, height: 150, crop: "fill", gravity: "face" },
+            { quality: "auto", fetch_format: "auto" },
           ],
         },
         (error, result) => {
@@ -336,7 +336,7 @@ const updateProfilePicture = async (req, res) => {
           else resolve(result);
         }
       );
-      uploadStream.end(req.file.buffer); // Upload the file buffer
+      uploadStream.end(req.file.buffer);
     });
 
     // Update the user's profilePicture field with the Cloudinary URL
@@ -397,4 +397,46 @@ const updateBio = async (req, res) => {
   }
 };
 
-module.exports = { registerUser, loginUser, refreshToken,forgotPassword, resetPassword, logoutUser, followUser, unfollowUser, updateProfilePicture, updateBio };
+// Get user by ID
+const getUserById = async (req, res) => {
+  try {
+    const userId = req.params.id;
+
+    // Validate the ID format (MongoDB ObjectId)
+    if (!userId.match(/^[0-9a-fA-F]{24}$/)) {
+      return res.status(400).json({ message: "Invalid user ID" });
+    }
+
+    // Fetch the user by ID and populate followers and following
+    const user = await User.findById(userId)
+      .select("-password -refreshTokens") // Exclude sensitive fields
+      .populate("followers", "firstname surname username profilePicture")
+      .populate("following", "firstname surname username profilePicture");
+
+    if (!user) {
+      return res.status(404).json({ message: "User not found" });
+    }
+
+    res.status(200).json({
+      message: "User fetched successfully",
+      user,
+    });
+  } catch (error) {
+    console.error("Error fetching user by ID:", error);
+    res.status(500).json({ message: "Server error" });
+  }
+};
+
+module.exports = { 
+  registerUser, 
+  loginUser, 
+  refreshToken,
+  forgotPassword, 
+  getUserById, 
+  resetPassword, 
+  logoutUser, 
+  followUser, 
+  unfollowUser, 
+  updateProfilePicture, 
+  updateBio 
+};
